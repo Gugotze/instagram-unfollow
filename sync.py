@@ -22,6 +22,15 @@ W_DM_RECENT = 2
 PROGRESS_KEY = "sync_progress"
 
 
+class _SyncCancelled(Exception):
+    pass
+
+
+def _check_cancel() -> None:
+    if db.get_setting("sync_cancel") == "1":
+        raise _SyncCancelled()
+
+
 def _progress(**kw) -> None:
     kw["at"] = datetime.now().isoformat(timespec="seconds")
     db.set_setting(PROGRESS_KEY, json.dumps(kw))
@@ -38,6 +47,7 @@ def _fetch_follow_list(cl, me, kind: str, total: int = 0) -> dict:
     max_id = ""
     label = "seguidores" if kind == "followers" else "quem você segue"
     while True:
+        _check_cancel()
         params = {"count": 200, "rank_token": cl.rank_token,
                   "search_surface": "follow_list_page", "query": "", "enable_groups": "true"}
         if max_id:
@@ -81,6 +91,7 @@ def _collect_dm_scores(cl, touch) -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(days=DM_RANGE_DAYS)
     cursor, fetched, page = None, 0, 0
     while fetched < DM_MAX_THREADS:
+        _check_cancel()
         chunk, cursor = cl.direct_threads_chunk(None, None, 1, cursor)
         page += 1
         old_found = False
@@ -180,6 +191,8 @@ def refresh_lists() -> None:
         _progress(state="done", msg="Listas atualizadas", elapsed=round(time.time() - started),
                   not_following_back=st["not_following_back"])
         db.set_setting("last_sync", now)
+    except _SyncCancelled:
+        _progress(state="cancelled", msg="Cancelado pelo usuário")
     except Exception as e:
         traceback.print_exc()
         _progress(state="error", msg=f"{type(e).__name__}: {e}")
@@ -210,6 +223,7 @@ def run_sync() -> None:
         _progress(state="running", step="media", msg="Baixando seus posts…", done=0, total=MEDIA_LIMIT)
         medias = cl.user_medias(me, amount=MEDIA_LIMIT)
         for i, m in enumerate(medias):
+            _check_cancel()
             _progress(state="running", step="media", done=i + 1, total=len(medias),
                       msg=f"Post {i + 1}/{len(medias)} — curtidas")
             try:
@@ -279,6 +293,8 @@ def run_sync() -> None:
         _progress(state="done", msg="Sincronização concluída", elapsed=round(time.time() - started),
                   **{k: stats[k] for k in ("total_following", "mutuals_pending", "not_following_back")})
         db.set_setting("last_sync", now)
+    except _SyncCancelled:
+        _progress(state="cancelled", msg="Cancelado pelo usuário")
     except Exception as e:
         traceback.print_exc()
         _progress(state="error", msg=f"{type(e).__name__}: {e}")

@@ -23,6 +23,10 @@ _sync_lock = threading.Lock()
 def _startup() -> None:
     insta.migrate_legacy()
     db.init()
+    p = sync.get_progress()
+    if p and p.get("state") == "running":
+        sync._progress(state="cancelled", msg="Interrompido — servidor reiniciado")
+    db.set_setting("sync_cancel", "0")
     worker.resume_if_desired()
 
 
@@ -89,6 +93,7 @@ def api_sync():
     p = sync.get_progress()
     if p and p.get("state") == "running":
         return {"ok": False, "msg": "Sincronização já em andamento"}
+    db.set_setting("sync_cancel", "0")
     threading.Thread(target=sync.run_sync, daemon=True, name="sync").start()
     return {"ok": True}
 
@@ -98,7 +103,14 @@ def api_refresh_lists():
     p = sync.get_progress()
     if p and p.get("state") == "running":
         return {"ok": False, "msg": "Sincronização já em andamento"}
+    db.set_setting("sync_cancel", "0")
     threading.Thread(target=sync.refresh_lists, daemon=True, name="refresh-lists").start()
+    return {"ok": True}
+
+
+@app.post("/api/sync/cancel")
+def api_sync_cancel():
+    db.set_setting("sync_cancel", "1")
     return {"ok": True}
 
 

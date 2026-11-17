@@ -112,7 +112,7 @@
   <div class="panel">
     <h2>Distribuição de scores (mútuos)</h2>
     <canvas id="hist" height="120"></canvas>
-    <div id="syncbar"><div class="bar"><div id="syncFill" style="width:0%"></div></div><div id="syncMsg" class="mut" style="margin-top:6px"></div></div>
+    <div id="syncbar"><div class="bar"><div id="syncFill" style="width:0%"></div></div><div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px"><div id="syncMsg" class="mut"></div><button class="pbtn" onclick="cancelSync()">cancelar</button></div></div>
   </div>
 </div>
 
@@ -265,6 +265,8 @@ async function logout(){
   await fetch("/api/logout",{method:"POST"});
   poll(); loadTab();
 }
+
+async function cancelSync(){ await fetch("/api/sync/cancel",{method:"POST"}); poll(); }
 
 async function doSync(){ await fetch("/api/sync",{method:"POST"}); poll(); }
 async function toggleWorker(){ await fetch(workerRunning?"/api/worker/stop":"/api/worker/start",{method:"POST"}); poll(); }
