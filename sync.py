@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import db
 from insta import get_client
+from instagrapi.extractors import extract_user_short
 
 MEDIA_LIMIT = 50          # posts recentes analisados
 DM_RANGE_DAYS = 365       # DMs contam se a thread teve atividade no último ano
@@ -29,6 +30,29 @@ def _progress(**kw) -> None:
 def get_progress() -> dict | None:
     raw = db.get_setting(PROGRESS_KEY)
     return json.loads(raw) if raw else None
+
+
+def _fetch_follow_list(cl, me, kind: str, total: int = 0) -> dict:
+    """Baixa friendships/{kind}/ paginado (200/pág.) reportando progresso. kind: followers|following."""
+    out: dict[int, object] = {}
+    max_id = ""
+    label = "seguidores" if kind == "followers" else "quem você segue"
+    while True:
+        params = {"count": 200, "rank_token": cl.rank_token,
+                  "search_surface": "follow_list_page", "query": "", "enable_groups": "true"}
+        if max_id:
+            params["max_id"] = max_id
+        result = cl.private_request(f"friendships/{me}/{kind}/", params=params)
+        page = result.get("users") or []
+        for u in page:
+            u = extract_user_short(u)
+            out[int(u.pk)] = u
+        _progress(state="running", step="lists", done=len(out), total=total,
+                  msg=f"Baixando {label}… {len(out)}/{total or '?'}")
+        max_id = result.get("next_max_id")
+        if not max_id or not page:
+            break
+    return out
 
 
 def _to_dt(ts) -> datetime | None:
@@ -123,11 +147,10 @@ def refresh_lists() -> None:
         cl = get_client()
         _progress(state="running", step="session", msg="Validando sessão…")
         me = cl.user_id or cl.account_info().pk
+        info = cl.user_info(me)
 
-        _progress(state="running", step="lists", msg="Baixando seguidores…")
-        followers = {int(k): v for k, v in cl.user_followers(me).items()}
-        _progress(state="running", step="lists", msg="Baixando quem você segue…")
-        following = {int(k): v for k, v in cl.user_following(me).items()}
+        followers = _fetch_follow_list(cl, me, "followers", info.follower_count or 0)
+        following = _fetch_follow_list(cl, me, "following", info.following_count or 0)
 
         _progress(state="running", step="save", msg="Atualizando relações…")
         now = datetime.now().isoformat(timespec="seconds")
@@ -169,11 +192,10 @@ def run_sync() -> None:
         cl = get_client()
         _progress(state="running", step="session", msg="Validando sessão…")
         me = cl.user_id or cl.account_info().pk
+        info = cl.user_info(me)
 
-        _progress(state="running", step="lists", msg="Baixando seguidores…")
-        followers = {int(k): v for k, v in cl.user_followers(me).items()}
-        _progress(state="running", step="lists", msg="Baixando quem você segue…")
-        following = {int(k): v for k, v in cl.user_following(me).items()}
+        followers = _fetch_follow_list(cl, me, "followers", info.follower_count or 0)
+        following = _fetch_follow_list(cl, me, "following", info.following_count or 0)
 
         scores: dict[int, dict] = {}
 
