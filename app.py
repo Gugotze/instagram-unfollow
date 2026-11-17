@@ -1,0 +1,144 @@
+"""Dashboard local + API. Rode: .venv/bin/uvicorn app:app --port 8777"""
+import threading
+from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+import db
+import insta
+import sync
+import worker
+from insta import has_session
+
+STATIC = Path(__file__).parent / "static"
+
+app = FastAPI(title="Instagram Unfollow")
+_sync_lock = threading.Lock()
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    db.init()
+    worker.resume_if_desired()
+
+
+@app.get("/")
+def index():
+    return FileResponse(STATIC / "index.html")
+
+
+@app.get("/api/status")
+def api_status():
+    return {
+        "logged_in": has_session(),
+        "stats": db.stats(),
+        "worker": worker.status(),
+        "sync": sync.get_progress(),
+        "last_sync": db.get_setting("last_sync"),
+    }
+
+
+QUERIES = {
+    "mutuals": """SELECT pk, username, full_name, profile_pic_url, likes, comments, story_views, dm, score, protected
+                  FROM users WHERE is_mutual=1 AND unfollowed_at IS NULL ORDER BY protected DESC, score ASC, pk""",
+    "nonfollowers": """SELECT pk, username, full_name, profile_pic_url, likes, comments, story_views, dm, score, protected
+                       FROM users WHERE i_follow=1 AND follows_me=0 AND unfollowed_at IS NULL
+                       ORDER BY score ASC, pk""",
+    "protected": """SELECT pk, username, full_name, profile_pic_url, likes, comments, story_views, dm, score, protected
+                    FROM users WHERE protected=1 AND unfollowed_at IS NULL ORDER BY username""",
+    "history": """SELECT pk, username, full_name, profile_pic_url, unfollowed_at AS score_label, score
+                  FROM users WHERE unfollowed_at IS NOT NULL ORDER BY unfollowed_at DESC""",
+}
+
+
+@app.get("/api/ranking")
+def api_ranking(tab: str = "mutuals"):
+    sql = QUERIES.get(tab, QUERIES["mutuals"])
+    rows = [dict(r) for r in db.conn().execute(sql).fetchall()]
+    return {"rows": rows}
+
+
+class ProtectBody(BaseModel):
+    protected: bool
+
+
+@app.post("/api/protect/{pk}")
+def api_protect(pk: int, body: ProtectBody):
+    db.conn().execute("UPDATE users SET protected=? WHERE pk=?", (int(body.protected), pk))
+    db.conn().commit()
+    return {"ok": True}
+
+
+@app.post("/api/worker/start")
+def api_worker_start():
+    return worker.start()
+
+
+@app.post("/api/worker/stop")
+def api_worker_stop():
+    return worker.stop()
+
+
+@app.post("/api/sync")
+def api_sync():
+    p = sync.get_progress()
+    if p and p.get("state") == "running":
+        return {"ok": False, "msg": "Sincronização já em andamento"}
+    threading.Thread(target=sync.run_sync, daemon=True, name="sync").start()
+    return {"ok": True}
+
+
+class SessionBody(BaseModel):
+    sessionid: str
+
+
+@app.post("/api/session")
+def api_session(body: SessionBody):
+    sid = body.sessionid.strip()
+    if not sid:
+        return {"ok": False, "msg": "sessionid vazio"}
+    try:
+        from instagrapi import Client
+        cl = Client()
+        cl.delay_range = [1, 3]
+        cl.login_by_sessionid(sid)
+        info = cl.account_info()
+        cl.dump_settings(insta.SESSION_FILE)
+        insta.save_cookies({"sessionid": sid})
+        return {"ok": True, "username": info.username}
+    except Exception as e:
+        return {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+
+
+class CapBody(BaseModel):
+    daily_cap: int
+
+
+@app.post("/api/settings/cap")
+def api_cap(body: CapBody):
+    db.set_setting("daily_cap", str(max(1, min(1600, body.daily_cap))))
+    return {"ok": True}
+
+
+class ScoreBody(BaseModel):
+    max_score: float
+
+
+@app.post("/api/settings/score")
+def api_score(body: ScoreBody):
+    db.set_setting("max_score", str(max(0, min(100, body.max_score))))
+    return {"ok": True}
+
+
+@app.get("/api/log")
+def api_log(limit: int = 100):
+    rows = [dict(r) for r in db.conn().execute(
+        "SELECT pk, username, at, ok, error FROM unfollow_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()]
+    return {"rows": rows}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8777)

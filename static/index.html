@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IG Cleanup — Unfollow</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0f14; --panel:#131822; --panel2:#18202e; --line:#232c3d;
+    --txt:#e6ecf5; --mut:#8a97ad; --acc:#5b8cff; --good:#3ecf8e; --warn:#f5b04b; --bad:#ef5d6c;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,"SF Pro Text",Inter,Segoe UI,Roboto,sans-serif;padding:28px}
+  h1{font-size:20px;font-weight:650;letter-spacing:-.02em}
+  h1 .sub{color:var(--mut);font-weight:400;font-size:13px;margin-left:10px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:var(--panel2)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--mut)}
+  .dot.on{background:var(--good)} .dot.off{background:var(--bad)} .dot.work{background:var(--warn)}
+  .btn{background:var(--acc);border:0;color:#fff;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px}
+  .btn.ghost{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}
+  .btn.warn{background:var(--warn);color:#20150a}
+  .btn:disabled{opacity:.45;cursor:default}
+  .grid{display:grid;gap:14px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card .n{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .card .l{color:var(--mut);font-size:12px;margin-top:2px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .panel h2{font-size:14px;font-weight:650;margin-bottom:10px}
+  .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden}
+  .bar>div{height:100%;background:linear-gradient(90deg,var(--acc),#8f6bff);transition:width .4s}
+  .rowflex{display:flex;gap:18px;flex-wrap:wrap}
+  .rowflex>.panel{flex:1;min-width:300px}
+  .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:6px 14px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;color:var(--mut);font-size:13px}
+  .tab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;color:var(--mut);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:7px 10px;border-bottom:1px solid #1b2331;font-size:13px;vertical-align:middle}
+  tr:hover td{background:#161d2b}
+  .ava{width:34px;height:34px;border-radius:50%;object-fit:cover;background:var(--panel2)}
+  .ava-f{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#3b4a66,#26324a);display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#cdd8ea;font-size:13px}
+  .u{display:flex;align-items:center;gap:10px}
+  .u a{color:var(--txt);text-decoration:none;font-weight:600}
+  .u a:hover{color:var(--acc)}
+  .u .fn{color:var(--mut);font-size:11px}
+  .chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;background:var(--panel2);border:1px solid var(--line);color:var(--mut);margin-right:4px}
+  .chip b{color:var(--txt);font-weight:600}
+  .score{font-weight:700;font-variant-numeric:tabular-nums}
+  .pbtn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--mut);cursor:pointer;padding:3px 10px;font-size:12px}
+  .pbtn:hover{border-color:var(--warn);color:var(--warn)}
+  .pbtn.on{border-color:var(--good);color:var(--good)}
+  .mut{color:var(--mut);font-size:12px}
+  #syncbar{display:none;margin-top:8px}
+  .err{color:var(--bad)}
+  .ok{color:var(--good)}
+  input[type=number]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 8px;width:70px}
+  input[type=password]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px 12px;flex:1;min-width:0}
+  code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>IG Cleanup<span class="sub">unfollow inteligente</span></h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="badge" id="loginBadge"><span class="dot off"></span>desconectado</span>
+    <button class="btn ghost" id="syncBtn" onclick="doSync()">Sincronizar</button>
+    <button class="btn warn" id="workerBtn" onclick="toggleWorker()">Iniciar</button>
+  </div>
+</header>
+
+<div class="panel" id="loginPanel" style="display:none">
+  <h2>Conectar sua conta</h2>
+  <div class="mut" style="margin-bottom:10px">
+    <b>Opção 1:</b> no terminal, rode <code>.venv/bin/python login.py</code> (Windows: <code>.venv\Scripts\python login.py</code>) — abre um Chrome, você entra no Instagram e a sessão é capturada sozinha.<br>
+    <b>Opção 2:</b> cole seu <code>sessionid</code> abaixo — estando logado no instagram.com: F12 → Application/Armazenamento → Cookies → copie o valor de <code>sessionid</code>.
+  </div>
+  <div style="display:flex;gap:8px">
+    <input type="password" id="sid" placeholder="sessionid">
+    <button class="btn" id="sidBtn" onclick="saveSession()">Conectar</button>
+  </div>
+  <div id="sidMsg" class="mut" style="margin-top:8px"></div>
+</div>
+
+<div class="grid cards">
+  <div class="card"><div class="n" id="stFollowing">–</div><div class="l">você segue</div></div>
+  <div class="card"><div class="n" id="stQueue">–</div><div class="l">na fila p/ remover</div></div>
+  <div class="card"><div class="n" id="stProt">–</div><div class="l">protegidos</div></div>
+  <div class="card"><div class="n" id="stNonF">–</div><div class="l">não te seguem</div></div>
+  <div class="card"><div class="n" id="stToday">–</div><div class="l">removidos hoje</div></div>
+  <div class="card"><div class="n" id="stTotal">–</div><div class="l">removidos total</div></div>
+</div>
+
+<div class="rowflex">
+  <div class="panel">
+    <h2>Worker</h2>
+    <div id="wStatus" class="mut">—</div>
+    <div style="margin:10px 0 4px" class="bar"><div id="wBar" style="width:0%"></div></div>
+    <div style="display:flex;justify-content:space-between" class="mut">
+      <span id="wToday">0/150 hoje</span><span id="wNext"></span>
+    </div>
+    <div style="margin-top:10px" class="mut">
+      teto diário: <input type="number" id="cap" value="150" min="1" max="1600" onchange="setCap(this.value)">
+      &nbsp;·&nbsp; remove só score ≤ <input type="number" id="maxscore" value="0" min="0" max="100" step="0.5" onchange="setScore(this.value)">
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Distribuição de scores (mútuos)</h2>
+    <canvas id="hist" height="120"></canvas>
+    <div id="syncbar"><div class="bar"><div id="syncFill" style="width:0%"></div></div><div id="syncMsg" class="mut" style="margin-top:6px"></div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="tabs">
+    <div class="tab on" data-t="mutuals" onclick="switchTab(this)">Fila de unfollow</div>
+    <div class="tab" data-t="nonfollowers" onclick="switchTab(this)">Não te seguem</div>
+    <div class="tab" data-t="protected" onclick="switchTab(this)">Protegidos</div>
+    <div class="tab" data-t="history" onclick="switchTab(this)">Histórico</div>
+  </div>
+  <div style="max-height:520px;overflow:auto">
+  <table>
+    <thead><tr><th>#</th><th>Pessoa</th><th>Score</th><th>Sinais</th><th></th></tr></thead>
+    <tbody id="tbody"><tr><td colspan="5" class="mut">Carregando…</td></tr></tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+let curTab = "mutuals", histChart = null, workerRunning = false;
+
+const esc = s => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const initial = n => `<span class="ava-f">${esc((n||"?")[0].toUpperCase())}</span>`;
+
+function fmtNext(iso){
+  if(!iso) return "";
+  const d = new Date(iso), ms = d - Date.now();
+  if(ms <= 0) return "";
+  const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+  return `próx. ação em ${m>0? m+"m ":""}${s}s`;
+}
+
+async function poll(){
+  try{
+    const r = await fetch("/api/status"); const j = await r.json();
+    document.getElementById("loginBadge").innerHTML = j.logged_in
+      ? '<span class="dot on"></span>sessão ativa' : '<span class="dot off"></span>sem sessão';
+    loginPanel.style.display = j.logged_in ? "none" : "block";
+    const st = j.stats;
+    stFollowing.textContent = st.total_following;
+    stQueue.textContent = st.queue ?? st.mutuals_pending;
+    stProt.textContent = st.protected;
+    stNonF.textContent = st.not_following_back;
+    stToday.textContent = st.unfollowed_today;
+    stTotal.textContent = st.unfollowed_total;
+
+    const w = j.worker; workerRunning = w.running;
+    const modeMap = {idle:"parado", working:"trabalhando", cooldown:"em pausa entre lotes",
+      night_pause:"pausa noturna", capped:"teto diário", blocked:"bloqueado pelo IG",
+      done:"concluído", error:"erro"};
+    wStatus.innerHTML = `<span class="dot ${w.running?'work':'off'}" style="display:inline-block;vertical-align:middle"></span>
+      <b style="margin-left:6px">${modeMap[w.mode]||w.mode}</b> — ${esc(w.msg||"")}`;
+    const pct = w.cap ? Math.min(100, 100*w.today/w.cap) : 0;
+    wBar.style.width = pct+"%";
+    wToday.textContent = `${w.today}/${w.cap} hoje`;
+    wNext.textContent = fmtNext(w.next_action_at);
+    workerBtn.textContent = w.running ? "Pausar" : "Iniciar";
+    workerBtn.className = "btn " + (w.running ? "ghost" : "warn");
+    cap.value = w.cap;
+    maxscore.value = w.max_score ?? 0;
+
+    const p = j.sync;
+    if(p && p.state === "running"){
+      syncbar.style.display = "block";
+      syncBtn.disabled = true;
+      const pc = p.total ? Math.round(100*p.done/p.total) : 0;
+      syncFill.style.width = pc+"%";
+      syncMsg.textContent = p.msg || "";
+    } else {
+      syncbar.style.display = "none"; syncBtn.disabled = false;
+      if(p && p.state === "error") wStatus.innerHTML += ` <span class="err">sync: ${esc(p.msg)}</span>`;
+    }
+  }catch(e){}
+}
+
+async function loadTab(){
+  const r = await fetch("/api/ranking?tab="+curTab); const j = await r.json();
+  const tb = tbody; tb.innerHTML = "";
+  if(!j.rows.length){ tb.innerHTML = `<tr><td colspan="5" class="mut" style="padding:20px">Nada aqui — rode Sincronizar primeiro.</td></tr>`; return; }
+  j.rows.forEach((u,i)=>{
+    const tr = document.createElement("tr");
+    const sinais = curTab==="history"
+      ? `<span class="mut">${esc(u.score_label||"")}</span>`
+      : `<span class="chip">👍 <b>${u.likes}</b></span><span class="chip">💬 <b>${u.comments}</b></span><span class="chip">👁 <b>${u.story_views}</b></span><span class="chip">✉️ <b>${u.dm}</b></span>`;
+    const btn = curTab==="history" ? "" :
+      `<button class="pbtn ${u.protected?'on':''}" onclick="protect(${u.pk},${u.protected?0:1},this)">${u.protected?'protegido':'proteger'}</button>`;
+    tr.innerHTML = `<td class="mut">${i+1}</td>
+      <td><div class="u"><img class="ava" src="${esc(u.profile_pic_url)}" onerror="this.outerHTML=initialEl('${esc(u.username)}')" loading="lazy">
+        <div><a href="https://instagram.com/${esc(u.username)}" target="_blank">@${esc(u.username)}</a><div class="fn">${esc(u.full_name||"")}</div></div></div></td>
+      <td class="score">${curTab==="history" ? "" : u.score}</td>
+      <td>${sinais}</td><td>${btn}</td>`;
+    tb.appendChild(tr);
+  });
+  if(curTab==="mutuals") drawHist(j.rows);
+}
+window.initialEl = n => initial(n);
+
+async function protect(pk, val, el){
+  await fetch(`/api/protect/${pk}`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({protected:!!val})});
+  loadTab(); poll();
+}
+
+function drawHist(rows){
+  const buckets = new Array(11).fill(0);
+  rows.forEach(r=>buckets[Math.min(10, Math.floor(r.score))]++);
+  const ctx = document.getElementById("hist");
+  if(histChart) histChart.destroy();
+  histChart = new Chart(ctx, {type:"bar",
+    data:{labels:["0","1","2","3","4","5","6","7","8","9","10+"],datasets:[{data:buckets,backgroundColor:"#5b8cff",borderRadius:4}]},
+    options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#8a97ad"},grid:{display:false}},y:{ticks:{color:"#8a97ad"},grid:{color:"#232c3d"}}}}});
+}
+
+function switchTab(el){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on")); el.classList.add("on"); curTab=el.dataset.t; loadTab(); }
+async function saveSession(){
+  sidBtn.disabled = true; sidMsg.textContent = "validando sessão…";
+  try{
+    const r = await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionid:sid.value})});
+    const j = await r.json();
+    sidMsg.innerHTML = j.ok
+      ? `<span class="ok">conectado como @${esc(j.username)}</span>`
+      : `<span class="err">${esc(j.msg||"falhou")}</span>`;
+    if(j.ok) sid.value = "";
+  }catch(e){ sidMsg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  sidBtn.disabled = false;
+  poll();
+}
+
+async function doSync(){ await fetch("/api/sync",{method:"POST"}); poll(); }
+async function toggleWorker(){ await fetch(workerRunning?"/api/worker/stop":"/api/worker/start",{method:"POST"}); poll(); }
+async function setCap(v){ await fetch("/api/settings/cap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({daily_cap:+v})}); }
+async function setScore(v){ await fetch("/api/settings/score",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({max_score:+v})}); poll(); }
+
+poll(); loadTab();
+setInterval(poll, 4000);
+setInterval(()=>{ if(workerRunning) poll(); }, 1000);
+</script>
+</body>
+</html>
