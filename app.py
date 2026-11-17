@@ -21,6 +21,7 @@ _sync_lock = threading.Lock()
 
 @app.on_event("startup")
 def _startup() -> None:
+    insta.migrate_legacy()
     db.init()
     worker.resume_if_desired()
 
@@ -34,6 +35,7 @@ def index():
 def api_status():
     return {
         "logged_in": has_session(),
+        "account": insta.current_username() or insta.current_account(),
         "stats": db.stats(),
         "worker": worker.status(),
         "sync": sync.get_progress(),
@@ -121,11 +123,19 @@ def api_session(body: SessionBody):
         cl.delay_range = [1, 3]
         cl.login_by_sessionid(sid)
         info = cl.account_info()
-        cl.dump_settings(insta.SESSION_FILE)
-        insta.save_cookies({"sessionid": sid})
+        insta.set_account(info.pk)
+        cl.dump_settings(insta.session_path())
+        insta.save_cookies({"sessionid": sid, "ds_user_id": str(info.pk), "username": info.username})
         return {"ok": True, "username": info.username}
     except Exception as e:
         return {"ok": False, "msg": f"{type(e).__name__}: {e}"}
+
+
+@app.post("/api/logout")
+def api_logout():
+    worker.stop()
+    insta.logout()
+    return {"ok": True}
 
 
 class CapBody(BaseModel):

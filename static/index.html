@@ -68,6 +68,7 @@
   <h1>IG Cleanup<span class="sub">unfollow inteligente</span></h1>
   <div style="display:flex;gap:8px;align-items:center">
     <span class="badge" id="loginBadge"><span class="dot off"></span>desconectado</span>
+    <button class="btn ghost" id="logoutBtn" onclick="logout()" style="display:none">sair</button>
     <button class="btn ghost" id="syncBtn" onclick="doSync()">Sincronizar</button>
     <button class="btn warn" id="workerBtn" onclick="toggleWorker()">Iniciar</button>
   </div>
@@ -152,8 +153,9 @@ async function poll(){
   try{
     const r = await fetch("/api/status"); const j = await r.json();
     document.getElementById("loginBadge").innerHTML = j.logged_in
-      ? '<span class="dot on"></span>sessão ativa' : '<span class="dot off"></span>sem sessão';
+      ? `<span class="dot on"></span>@${esc(j.account||"?")}` : '<span class="dot off"></span>sem sessão';
     loginPanel.style.display = j.logged_in ? "none" : "block";
+    logoutBtn.style.display = j.logged_in ? "" : "none";
     const st = j.stats; lastStats = st;
     stFollowing.textContent = st.total_following;
     stQueue.textContent = st.queue ?? st.mutuals_pending;
@@ -256,6 +258,12 @@ async function saveSession(){
   }catch(e){ sidMsg.innerHTML = `<span class="err">${esc(e.message)}</span>`; }
   sidBtn.disabled = false;
   poll();
+}
+
+async function logout(){
+  if(!confirm("Desconectar desta conta?\nOs dados ficam salvos por conta — dá pra reconectar depois.")) return;
+  await fetch("/api/logout",{method:"POST"});
+  poll(); loadTab();
 }
 
 async function doSync(){ await fetch("/api/sync",{method:"POST"}); poll(); }

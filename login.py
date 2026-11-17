@@ -9,9 +9,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-from insta import DATA_DIR, save_cookies, SESSION_FILE
-
-PROFILE_DIR = DATA_DIR / "chrome-profile"
+from insta import PROFILE_DIR, cookies_path, save_cookies, session_path, set_account
 
 
 def main() -> None:
@@ -57,18 +55,17 @@ def main() -> None:
         cl = Client()
         cl.login_by_sessionid(sessionid)
         info = cl.account_info()
-        cl.dump_settings(SESSION_FILE)
+        set_account(info.pk)
+        cl.dump_settings(session_path())
 
         keep = {k: cookies_map.get(k) for k in ("sessionid", "csrftoken", "ds_user_id", "mid", "ig_did") if cookies_map.get(k)}
         keep["sessionid"] = sessionid
+        keep["username"] = info.username
         save_cookies(keep)
 
         print(f"\nLogado como @{info.username} (pk {info.pk}).")
-        print(f"Sessão salva em {COOKIES_FILE_SAFE}. Pode fechar o navegador.")
+        print(f"Sessão salva em {cookies_path()}. Pode fechar o navegador.")
         ctx.close()
-
-
-COOKIES_FILE_SAFE = DATA_DIR / "cookies.json"
 
 if __name__ == "__main__":
     main()

@@ -10,12 +10,12 @@ Ferramenta local para avaliar mutuals do Instagram por interação e dar unfollo
 
 ## Estrutura
 
-- `login.py` — captura cookies via Playwright → `data/cookies.json` + `data/session.json`
-- `insta.py` — client instagrapi (login por sessionid, delay_range 1-3s)
+- `login.py` — captura cookies via Playwright → `data/accounts/<pk>/cookies.json` + `session.json`
+- `insta.py` — client instagrapi (login por sessionid, delay_range 1-3s). Multi-conta: `data/current` guarda o pk ativo; `set_account()`, `logout()` (para worker, apaga sessão+chrome-profile, mantém DB), `migrate_legacy()`
 - `sync.py` — followers/following + likes/comentários em posts, viewers/likes de stories, threads de DM → score em SQLite. `refresh_lists()` é a versão leve: só baixa followers/following e atualiza flags de relação (sem mexer em scores)
 - `worker.py` — thread de unfollow: lotes 8-12, pausa 4.5-6.5min, teto settings.daily_cap (máx 1600 via API), pausa 23h-8h, auto-retomada após bloqueio. `settings.worker_target` = "mutuals" (default, score≤max_score) ou "nonfollowers" (limpeza da aba "Não te seguem", ignora score; volta pra mutuals quando a fila zera)
 - `app.py` — FastAPI + `static/index.html`
-- Dados: `data/unfollow.db` (users, settings, unfollow_log)
+- Dados: `data/accounts/<pk>/unfollow.db` por conta (users, settings, unfollow_log)
 
 ## Pesos do score
 

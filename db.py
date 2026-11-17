@@ -3,58 +3,72 @@ import threading
 from datetime import datetime, date
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "data" / "unfollow.db"
+DATA_DIR = Path(__file__).parent / "data"
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    pk INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    full_name TEXT,
+    profile_pic_url TEXT,
+    follows_me INTEGER DEFAULT 0,
+    i_follow INTEGER DEFAULT 0,
+    is_mutual INTEGER DEFAULT 0,
+    likes INTEGER DEFAULT 0,
+    comments INTEGER DEFAULT 0,
+    story_views INTEGER DEFAULT 0,
+    dm INTEGER DEFAULT 0,
+    score REAL DEFAULT 0,
+    protected INTEGER DEFAULT 0,
+    unfollowed_at TEXT,
+    updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+CREATE TABLE IF NOT EXISTS unfollow_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pk INTEGER,
+    username TEXT,
+    at TEXT,
+    ok INTEGER,
+    error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_users_score ON users(is_mutual, protected, unfollowed_at, score);
+"""
 
 _local = threading.local()
 
 
+def _db_path() -> Path:
+    try:
+        acct = (DATA_DIR / "current").read_text().strip() or "default"
+    except Exception:
+        acct = "default"
+    d = DATA_DIR / "accounts" / acct
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "unfollow.db"
+
+
 def conn() -> sqlite3.Connection:
-    c = getattr(_local, "c", None)
-    if c is None:
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        c = sqlite3.connect(DB_PATH)
+    path = str(_db_path())
+    if getattr(_local, "path", None) != path:
+        old = getattr(_local, "c", None)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+        c = sqlite3.connect(path)
         c.row_factory = sqlite3.Row
-        _local.c = c
-    return c
+        c.executescript(_DDL)
+        _local.c, _local.path = c, path
+    return _local.c
 
 
 def init() -> None:
-    c = conn()
-    c.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            pk INTEGER PRIMARY KEY,
-            username TEXT NOT NULL,
-            full_name TEXT,
-            profile_pic_url TEXT,
-            follows_me INTEGER DEFAULT 0,
-            i_follow INTEGER DEFAULT 0,
-            is_mutual INTEGER DEFAULT 0,
-            likes INTEGER DEFAULT 0,
-            comments INTEGER DEFAULT 0,
-            story_views INTEGER DEFAULT 0,
-            dm INTEGER DEFAULT 0,
-            score REAL DEFAULT 0,
-            protected INTEGER DEFAULT 0,
-            unfollowed_at TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-        CREATE TABLE IF NOT EXISTS unfollow_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pk INTEGER,
-            username TEXT,
-            at TEXT,
-            ok INTEGER,
-            error TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_users_score ON users(is_mutual, protected, unfollowed_at, score);
-        """
-    )
-    c.commit()
+    conn()
 
 
 def get_setting(key: str, default: str | None = None) -> str | None:

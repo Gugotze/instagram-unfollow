@@ -85,14 +85,18 @@ você — é por ela que o worker começa.
 
 ## Onde ficam seus dados
 
-Tudo em `data/`:
+Tudo em `data/`, separado **por conta** (`data/accounts/<pk>/`):
 
-- `cookies.json` + `session.json` — sua sessão do Instagram
-- `unfollow.db` — ranking, protegidos e histórico
-- `chrome-profile/` — perfil do navegador do login assistido
+- `cookies.json` + `session.json` — a sessão daquela conta
+- `unfollow.db` — ranking, protegidos e histórico dela
+- `chrome-profile/` (na raiz de `data/`) — perfil do navegador do login assistido
 
-**Nunca compartilhe a pasta `data/`** — ela é o acesso completo à sua conta.
-Pra resetar tudo, apague `data/` e logue de novo.
+O botão **sair** desconecta a conta ativa (apaga a sessão e o perfil do
+navegador, mas **mantém o banco**) — dá pra alternar entre várias contas e
+cada uma guarda seu próprio histórico e protegidos.
+
+**Nunca compartilhe a pasta `data/`** — ela é o acesso completo às suas contas.
+Pra resetar uma conta, apague a pasta dela em `data/accounts/`.
 
 ## Problemas comuns
 
