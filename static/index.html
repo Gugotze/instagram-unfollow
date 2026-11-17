@@ -59,6 +59,7 @@
   .err{color:var(--bad)}
   .ok{color:var(--good)}
   input[type=number]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 8px;width:70px}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 6px}
   input[type=password]{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:8px 12px;flex:1;min-width:0}
   code{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:12px}
 </style>
@@ -122,9 +123,15 @@
     <div class="tab" data-t="nonfollowers" onclick="switchTab(this)">Não te seguem</div>
     <div class="tab" data-t="protected" onclick="switchTab(this)">Protegidos</div>
     <div class="tab" data-t="history" onclick="switchTab(this)">Histórico</div>
-    <span id="tabActions" style="display:none;margin-left:auto;gap:8px;align-items:center">
-      <button class="btn ghost" id="refreshBtn" onclick="refreshLists()" style="padding:6px 12px">↻ atualizar lista</button>
-      <button class="btn warn" id="cleanBtn" onclick="cleanupNonfollowers()" style="padding:6px 12px">iniciar limpeza</button>
+    <span id="tabActions" style="display:none;margin-left:auto;gap:6px;align-items:center">
+      <span class="mut">em massa: score</span>
+      <select id="bulkOp" onchange="resetBulk()"><option value="<=">≤</option><option value=">=">≥</option></select>
+      <input type="number" id="bulkScore" value="0" step="0.5" min="0" style="width:60px" onchange="resetBulk()">
+      <button class="pbtn" id="bulkBtn" onclick="bulkProtect()">proteger</button>
+      <span id="nfActions" style="display:none;gap:8px;margin-left:10px">
+        <button class="btn ghost" id="refreshBtn" onclick="refreshLists()" style="padding:6px 12px">↻ atualizar lista</button>
+        <button class="btn warn" id="cleanBtn" onclick="cleanupNonfollowers()" style="padding:6px 12px">iniciar limpeza</button>
+      </span>
     </span>
   </div>
   <div style="max-height:520px;overflow:auto">
@@ -232,7 +239,22 @@ function drawHist(rows){
     options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#8a97ad"},grid:{display:false}},y:{ticks:{color:"#8a97ad"},grid:{color:"#232c3d"}}}}});
 }
 
-function switchTab(el){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on")); el.classList.add("on"); curTab=el.dataset.t; tabActions.style.display = curTab==="nonfollowers" ? "inline-flex" : "none"; loadTab(); }
+function switchTab(el){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on")); el.classList.add("on"); curTab=el.dataset.t;
+  tabActions.style.display = (curTab==="mutuals"||curTab==="nonfollowers") ? "inline-flex" : "none";
+  nfActions.style.display = curTab==="nonfollowers" ? "inline-flex" : "none";
+  loadTab(); }
+
+let bulkNext = true;
+function resetBulk(){ bulkNext = true; updateBulkBtn(); }
+function updateBulkBtn(){ bulkBtn.textContent = (bulkNext?"proteger ":"desproteger ") + (bulkOp.value===">="?"≥":"≤") + bulkScore.value; }
+async function bulkProtect(){
+  const r = await fetch("/api/protect/bulk",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({protected:bulkNext, scope:curTab, op:bulkOp.value, score:+bulkScore.value})});
+  const j = await r.json();
+  bulkNext = !bulkNext; updateBulkBtn();
+  loadTab(); poll();
+}
+resetBulk();
 
 async function refreshLists(){
   refreshBtn.disabled = true;
@@ -274,6 +296,7 @@ async function setCap(v){ await fetch("/api/settings/cap",{method:"POST",headers
 async function setScore(v){ await fetch("/api/settings/score",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({max_score:+v})}); poll(); }
 
 poll(); loadTab();
+tabActions.style.display = "inline-flex";
 setInterval(poll, 4000);
 setInterval(()=>{ if(workerRunning) poll(); }, 1000);
 </script>

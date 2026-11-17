@@ -71,6 +71,25 @@ class ProtectBody(BaseModel):
     protected: bool
 
 
+class BulkProtectBody(BaseModel):
+    protected: bool
+    scope: str = "mutuals"   # mutuals | nonfollowers
+    op: str = "<="           # <= | >=
+    score: float = 0
+
+
+@app.post("/api/protect/bulk")
+def api_protect_bulk(body: BulkProtectBody):
+    op = ">=" if body.op == ">=" else "<="
+    cond = "is_mutual=1 AND i_follow=1" if body.scope == "mutuals" else "i_follow=1 AND follows_me=0"
+    cur = db.conn().execute(
+        f"UPDATE users SET protected=? WHERE unfollowed_at IS NULL AND {cond} AND score {op} ?",
+        (int(body.protected), body.score),
+    )
+    db.conn().commit()
+    return {"ok": True, "updated": cur.rowcount}
+
+
 @app.post("/api/protect/{pk}")
 def api_protect(pk: int, body: ProtectBody):
     db.conn().execute("UPDATE users SET protected=? WHERE pk=?", (int(body.protected), pk))
