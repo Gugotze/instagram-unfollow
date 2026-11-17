@@ -85,7 +85,14 @@ def upsert_user(u: dict) -> None:
     c.commit()
 
 
-def next_candidates(limit: int, max_score: float = 0) -> list[sqlite3.Row]:
+def next_candidates(limit: int, max_score: float = 0, scope: str = "mutuals") -> list[sqlite3.Row]:
+    if scope == "nonfollowers":
+        return conn().execute(
+            """SELECT pk, username, score FROM users
+               WHERE i_follow=1 AND follows_me=0 AND protected=0 AND unfollowed_at IS NULL
+               ORDER BY score ASC, pk ASC LIMIT ?""",
+            (limit,),
+        ).fetchall()
     return conn().execute(
         """SELECT pk, username, score FROM users
            WHERE is_mutual=1 AND protected=0 AND unfollowed_at IS NULL AND i_follow=1 AND score<=?
@@ -121,6 +128,7 @@ def stats() -> dict:
         "queue": one("SELECT COUNT(*) FROM users WHERE is_mutual=1 AND unfollowed_at IS NULL AND protected=0 AND score<=?", max_score),
         "protected": one("SELECT COUNT(*) FROM users WHERE protected=1 AND unfollowed_at IS NULL"),
         "not_following_back": one("SELECT COUNT(*) FROM users WHERE i_follow=1 AND follows_me=0 AND unfollowed_at IS NULL"),
+        "nonfollowers_pending": one("SELECT COUNT(*) FROM users WHERE i_follow=1 AND follows_me=0 AND protected=0 AND unfollowed_at IS NULL"),
         "unfollowed_total": one("SELECT COUNT(*) FROM unfollow_log WHERE ok=1"),
         "unfollowed_today": unfollowed_today(),
     }

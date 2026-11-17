@@ -38,6 +38,7 @@ def status() -> dict:
     s["today"] = db.unfollowed_today()
     s["cap"] = int(db.get_setting("daily_cap", str(DEFAULT_CAP)))
     s["max_score"] = float(db.get_setting("max_score", "0") or 0)
+    s["target"] = db.get_setting("worker_target", "mutuals") or "mutuals"
     return s
 
 
@@ -135,10 +136,13 @@ def _loop() -> None:
             continue
 
         max_score = float(db.get_setting("max_score", "0") or 0)
-        cands = db.next_candidates(min(random.randint(*BATCH_RANGE), cap - today), max_score)
+        target = db.get_setting("worker_target", "mutuals") or "mutuals"
+        cands = db.next_candidates(min(random.randint(*BATCH_RANGE), cap - today), max_score, target)
         if not cands:
-            _state.update(running=False, mode="done",
-                          msg=f"Fila vazia — todo mundo com score ≤ {max_score:g} foi processado.")
+            msg = ("Limpeza de não-seguidores concluída — zerou a fila." if target == "nonfollowers"
+                   else f"Fila vazia — todo mundo com score ≤ {max_score:g} foi processado.")
+            db.set_setting("worker_target", "mutuals")
+            _state.update(running=False, mode="done", msg=msg)
             db.set_setting("worker_desired", "0")
             _save()
             break

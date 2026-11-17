@@ -91,6 +91,21 @@ def api_sync():
     return {"ok": True}
 
 
+@app.post("/api/refresh_lists")
+def api_refresh_lists():
+    p = sync.get_progress()
+    if p and p.get("state") == "running":
+        return {"ok": False, "msg": "Sincronização já em andamento"}
+    threading.Thread(target=sync.refresh_lists, daemon=True, name="refresh-lists").start()
+    return {"ok": True}
+
+
+@app.post("/api/cleanup/nonfollowers")
+def api_cleanup_nonfollowers():
+    db.set_setting("worker_target", "nonfollowers")
+    return worker.start()
+
+
 class SessionBody(BaseModel):
     sessionid: str
 

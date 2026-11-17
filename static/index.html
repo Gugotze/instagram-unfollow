@@ -119,6 +119,10 @@
     <div class="tab" data-t="nonfollowers" onclick="switchTab(this)">Não te seguem</div>
     <div class="tab" data-t="protected" onclick="switchTab(this)">Protegidos</div>
     <div class="tab" data-t="history" onclick="switchTab(this)">Histórico</div>
+    <span id="tabActions" style="display:none;margin-left:auto;gap:8px;align-items:center">
+      <button class="btn ghost" id="refreshBtn" onclick="refreshLists()" style="padding:6px 12px">↻ atualizar lista</button>
+      <button class="btn warn" id="cleanBtn" onclick="cleanupNonfollowers()" style="padding:6px 12px">iniciar limpeza</button>
+    </span>
   </div>
   <div style="max-height:520px;overflow:auto">
   <table>
@@ -129,7 +133,7 @@
 </div>
 
 <script>
-let curTab = "mutuals", histChart = null, workerRunning = false;
+let curTab = "mutuals", histChart = null, workerRunning = false, lastStats = null;
 
 const esc = s => (s||"").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const initial = n => `<span class="ava-f">${esc((n||"?")[0].toUpperCase())}</span>`;
@@ -148,7 +152,7 @@ async function poll(){
     document.getElementById("loginBadge").innerHTML = j.logged_in
       ? '<span class="dot on"></span>sessão ativa' : '<span class="dot off"></span>sem sessão';
     loginPanel.style.display = j.logged_in ? "none" : "block";
-    const st = j.stats;
+    const st = j.stats; lastStats = st;
     stFollowing.textContent = st.total_following;
     stQueue.textContent = st.queue ?? st.mutuals_pending;
     stProt.textContent = st.protected;
@@ -161,7 +165,7 @@ async function poll(){
       night_pause:"pausa noturna", capped:"teto diário", blocked:"bloqueado pelo IG",
       done:"concluído", error:"erro"};
     wStatus.innerHTML = `<span class="dot ${w.running?'work':'off'}" style="display:inline-block;vertical-align:middle"></span>
-      <b style="margin-left:6px">${modeMap[w.mode]||w.mode}</b> — ${esc(w.msg||"")}`;
+      <b style="margin-left:6px">${modeMap[w.mode]||w.mode}</b>${w.target==="nonfollowers"?' <span class="chip">não-seguidores</span>':''} — ${esc(w.msg||"")}`;
     const pct = w.cap ? Math.min(100, 100*w.today/w.cap) : 0;
     wBar.style.width = pct+"%";
     wToday.textContent = `${w.today}/${w.cap} hoje`;
@@ -174,12 +178,12 @@ async function poll(){
     const p = j.sync;
     if(p && p.state === "running"){
       syncbar.style.display = "block";
-      syncBtn.disabled = true;
+      syncBtn.disabled = true; refreshBtn.disabled = true;
       const pc = p.total ? Math.round(100*p.done/p.total) : 0;
       syncFill.style.width = pc+"%";
       syncMsg.textContent = p.msg || "";
     } else {
-      syncbar.style.display = "none"; syncBtn.disabled = false;
+      syncbar.style.display = "none"; syncBtn.disabled = false; refreshBtn.disabled = false;
       if(p && p.state === "error") wStatus.innerHTML += ` <span class="err">sync: ${esc(p.msg)}</span>`;
     }
   }catch(e){}
@@ -222,7 +226,20 @@ function drawHist(rows){
     options:{plugins:{legend:{display:false}},scales:{x:{ticks:{color:"#8a97ad"},grid:{display:false}},y:{ticks:{color:"#8a97ad"},grid:{color:"#232c3d"}}}}});
 }
 
-function switchTab(el){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on")); el.classList.add("on"); curTab=el.dataset.t; loadTab(); }
+function switchTab(el){ document.querySelectorAll(".tab").forEach(t=>t.classList.remove("on")); el.classList.add("on"); curTab=el.dataset.t; tabActions.style.display = curTab==="nonfollowers" ? "inline-flex" : "none"; loadTab(); }
+
+async function refreshLists(){
+  refreshBtn.disabled = true;
+  await fetch("/api/refresh_lists",{method:"POST"});
+  poll();
+}
+
+async function cleanupNonfollowers(){
+  const n = (lastStats && lastStats.nonfollowers_pending) || 0;
+  if(!confirm(`Iniciar unfollow em ${n} contas que não te seguem?\n(protegidos ficam de fora)`)) return;
+  await fetch("/api/cleanup/nonfollowers",{method:"POST"});
+  poll();
+}
 async function saveSession(){
   sidBtn.disabled = true; sidMsg.textContent = "validando sessão…";
   try{

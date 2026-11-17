@@ -115,6 +115,53 @@ def rescore_dm() -> None:
     print(f"Concluído: {fetched} threads, {len(dm_map)} pessoas com DM")
 
 
+def refresh_lists() -> None:
+    """Sync leve: só atualiza followers/following e as flags de relação (sem analisar interações)."""
+    db.init()
+    started = time.time()
+    try:
+        cl = get_client()
+        _progress(state="running", step="session", msg="Validando sessão…")
+        me = cl.user_id or cl.account_info().pk
+
+        _progress(state="running", step="lists", msg="Baixando seguidores…")
+        followers = {int(k): v for k, v in cl.user_followers(me).items()}
+        _progress(state="running", step="lists", msg="Baixando quem você segue…")
+        following = {int(k): v for k, v in cl.user_following(me).items()}
+
+        _progress(state="running", step="save", msg="Atualizando relações…")
+        now = datetime.now().isoformat(timespec="seconds")
+        c = db.conn()
+        existing = {r["pk"] for r in c.execute("SELECT pk FROM users")}
+        for pk, u in following.items():
+            follows_me = 1 if pk in followers else 0
+            if pk in existing:
+                c.execute(
+                    """UPDATE users SET username=?, full_name=?, profile_pic_url=?,
+                                       follows_me=?, i_follow=1, is_mutual=?, unfollowed_at=NULL, updated_at=?
+                       WHERE pk=?""",
+                    (u.username, u.full_name or "", str(u.profile_pic_url or ""), follows_me, follows_me, now, pk),
+                )
+            else:
+                db.upsert_user({"pk": pk, "username": u.username, "full_name": u.full_name or "",
+                                "profile_pic_url": str(u.profile_pic_url or ""), "follows_me": follows_me,
+                                "i_follow": 1, "is_mutual": follows_me, "likes": 0, "comments": 0,
+                                "story_views": 0, "dm": 0, "score": 0, "updated_at": now})
+        # quem sumiu do following (unfollow fora do app)
+        for row in c.execute("SELECT pk FROM users WHERE i_follow=1 AND unfollowed_at IS NULL").fetchall():
+            if row["pk"] not in following:
+                c.execute("UPDATE users SET i_follow=0, is_mutual=0, unfollowed_at=? WHERE pk=?", (now, row["pk"]))
+        c.commit()
+
+        st = db.stats()
+        _progress(state="done", msg="Listas atualizadas", elapsed=round(time.time() - started),
+                  not_following_back=st["not_following_back"])
+        db.set_setting("last_sync", now)
+    except Exception as e:
+        traceback.print_exc()
+        _progress(state="error", msg=f"{type(e).__name__}: {e}")
+
+
 def run_sync() -> None:
     db.init()
     started = time.time()
