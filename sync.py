@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 
 import db
+import insta
 from insta import get_client
 from instagrapi.extractors import extract_user_short
 
@@ -113,6 +114,7 @@ def _collect_dm_scores(cl, touch) -> None:
 
 def rescore_dm() -> None:
     """Atualiza só a coluna dm + score, percorrendo threads do último ano."""
+    db.use_account(insta.current_account())
     db.init()
     cl = get_client()
     dm_map: dict[int, int] = {}
@@ -152,6 +154,8 @@ def rescore_dm() -> None:
 
 def refresh_lists() -> None:
     """Sync leve: só atualiza followers/following e as flags de relação (sem analisar interações)."""
+    db.use_account(insta.current_account())
+    db.set_setting("sync_cancel", "0")
     db.init()
     started = time.time()
     try:
@@ -199,6 +203,8 @@ def refresh_lists() -> None:
 
 
 def run_sync() -> None:
+    db.use_account(insta.current_account())
+    db.set_setting("sync_cancel", "0")
     db.init()
     started = time.time()
     try:

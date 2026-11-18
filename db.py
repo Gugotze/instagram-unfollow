@@ -1,3 +1,4 @@
+import contextvars
 import sqlite3
 import threading
 from datetime import datetime, date
@@ -39,13 +40,22 @@ CREATE INDEX IF NOT EXISTS idx_users_score ON users(is_mutual, protected, unfoll
 """
 
 _local = threading.local()
+_acct_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("db_acct", default=None)
+
+
+def use_account(acct: str | None) -> None:
+    """Amarra a thread atual à conta dona dela — sync/worker gravam no banco certo
+    mesmo se o usuário trocar de conta no meio da execução."""
+    _acct_var.set(acct)
 
 
 def _db_path() -> Path:
-    try:
-        acct = (DATA_DIR / "current").read_text().strip() or "default"
-    except Exception:
-        acct = "default"
+    acct = _acct_var.get()
+    if not acct:
+        try:
+            acct = (DATA_DIR / "current").read_text().strip() or "default"
+        except Exception:
+            acct = "default"
     d = DATA_DIR / "accounts" / acct
     d.mkdir(parents=True, exist_ok=True)
     return d / "unfollow.db"

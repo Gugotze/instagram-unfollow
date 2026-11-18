@@ -164,6 +164,7 @@ def api_session(body: SessionBody):
 
 @app.post("/api/logout")
 def api_logout():
+    db.set_setting("sync_cancel", "1")
     worker.stop()
     insta.logout()
     return {"ok": True}

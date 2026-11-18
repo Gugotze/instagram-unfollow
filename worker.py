@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 
 import db
+import insta
 from insta import get_client
 
 BATCH_RANGE = (8, 12)
@@ -106,6 +107,7 @@ def _sleep_while(resume_at: datetime) -> None:
 
 
 def _loop() -> None:
+    db.use_account(insta.current_account())
     try:
         cl = get_client()
     except Exception as e:
