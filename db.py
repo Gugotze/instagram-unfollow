@@ -136,13 +136,16 @@ def stats() -> dict:
     def one(sql, *a):
         return c.execute(sql, a).fetchone()[0]
     max_score = float(get_setting("max_score", "0") or 0)
+    target = get_setting("worker_target", "mutuals") or "mutuals"
+    mutuals_queue = one("SELECT COUNT(*) FROM users WHERE is_mutual=1 AND unfollowed_at IS NULL AND protected=0 AND score<=?", max_score)
+    nonf_pending = one("SELECT COUNT(*) FROM users WHERE i_follow=1 AND follows_me=0 AND protected=0 AND unfollowed_at IS NULL")
     return {
         "total_following": one("SELECT COUNT(*) FROM users WHERE i_follow=1"),
         "mutuals_pending": one("SELECT COUNT(*) FROM users WHERE is_mutual=1 AND unfollowed_at IS NULL AND protected=0"),
-        "queue": one("SELECT COUNT(*) FROM users WHERE is_mutual=1 AND unfollowed_at IS NULL AND protected=0 AND score<=?", max_score),
+        "queue": nonf_pending if target == "nonfollowers" else mutuals_queue,
         "protected": one("SELECT COUNT(*) FROM users WHERE protected=1 AND unfollowed_at IS NULL"),
         "not_following_back": one("SELECT COUNT(*) FROM users WHERE i_follow=1 AND follows_me=0 AND unfollowed_at IS NULL"),
-        "nonfollowers_pending": one("SELECT COUNT(*) FROM users WHERE i_follow=1 AND follows_me=0 AND protected=0 AND unfollowed_at IS NULL"),
+        "nonfollowers_pending": nonf_pending,
         "unfollowed_total": one("SELECT COUNT(*) FROM unfollow_log WHERE ok=1"),
         "unfollowed_today": unfollowed_today(),
     }
